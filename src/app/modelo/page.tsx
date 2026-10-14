@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ProblemPanel } from "@/components/ProblemPanel";
 import { getModel } from "@/lib/api";
 import { num, numericEntries } from "@/lib/format";
+import { attemptFrom } from "@/lib/retry";
 import { settle } from "@/lib/settle";
 import { clean } from "@/lib/text";
 
@@ -33,7 +34,8 @@ function MetricsTable({ title, data }: { title: string; data: Record<string, unk
   );
 }
 
-export default async function Modelo() {
+export default async function Modelo({ searchParams }: { searchParams?: Promise<{ r?: string | string[] }> } = {}) {
+  const attempt = attemptFrom((await searchParams)?.r);
   const res = await settle(getModel());
   return (
     <>
@@ -67,7 +69,7 @@ export default async function Modelo() {
           </p>
         </>
       ) : (
-        <ProblemPanel error={res.error} path="/modelo" />
+        <ProblemPanel error={res.error} path="/modelo" attempt={attempt} />
       )}
     </>
   );

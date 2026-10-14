@@ -1,7 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { buildCsp } from "@/lib/csp";
+import { badRequestResponse, buildCsp } from "@/lib/csp";
+
+/** Ruta con codificación porcentual inválida (p. ej. /ticker/%zz): Next respondería 500 en texto plano. */
+function hasBadEncoding(request: NextRequest): boolean {
+  try {
+    decodeURIComponent(new URL(request.url).pathname);
+    return false;
+  } catch {
+    return true;
+  }
+}
 
 export function proxy(request: NextRequest) {
+  if (hasBadEncoding(request)) return badRequestResponse();
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const csp = buildCsp(nonce, process.env.NODE_ENV === "development");
   const requestHeaders = new Headers(request.headers);

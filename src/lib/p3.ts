@@ -102,7 +102,12 @@ function errorFrom(status: number, text: string, headers: Headers): P3Error {
   return new P3Error("invalid", message ?? `La API rechazó la consulta (HTTP ${status}).`, status, code, rid);
 }
 
-export type GetOptions = { params?: Record<string, string | number>; ttlMs?: number };
+export type GetOptions = {
+  params?: Record<string, string | number>;
+  ttlMs?: number;
+  /** Si se indica, la respuesta se valida ANTES de cachearla: una respuesta malformada nunca queda en caché. */
+  schema?: z.ZodType;
+};
 
 /** GET a P3 con plazo total, tope de tamaño, sin compresión y reintentos acotados. Devuelve JSON sin validar. */
 export async function p3Get(path: string, opts: GetOptions = {}): Promise<unknown> {
@@ -146,6 +151,7 @@ export async function p3Get(path: string, opts: GetOptions = {}): Promise<unknow
       } catch {
         throw new P3Error("unexpected", "Respuesta inesperada de la API (no es JSON).");
       }
+      if (opts.schema) data = parseWith(opts.schema, data); // lanza P3Error("unexpected") antes de cachear
       if (opts.ttlMs) {
         if (cache.size >= MAX_CACHE) cache.delete(cache.keys().next().value as string);
         cache.set(key, { exp: deps.now() + opts.ttlMs, data });
@@ -160,6 +166,11 @@ export async function p3Get(path: string, opts: GetOptions = {}): Promise<unknow
     }
   }
   throw last ?? new P3Error("unavailable", "No se pudo conectar con la API de mercado.");
+}
+
+/** p3Get + validación con esquema (antes de cachear), con tipo de salida. */
+export async function p3Fetch<S extends z.ZodType>(schema: S, path: string, opts: Omit<GetOptions, "schema"> = {}): Promise<z.infer<S>> {
+  return (await p3Get(path, { ...opts, schema })) as z.infer<S>;
 }
 
 /** Valida la forma de una respuesta; si no coincide, error controlado ("respuesta inesperada"). */

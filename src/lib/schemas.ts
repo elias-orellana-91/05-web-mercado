@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { clean } from "./text";
 
-const text = (max: number) => z.string().max(max);
+// Todo texto de la API se sanea al validar (sin control/bidi/invisibles): así tampoco viaja sucio en el payload RSC.
+const text = (max: number) => z.string().max(max).transform((s) => clean(s, max));
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}/).max(40);
 const num = z.number().finite();
 

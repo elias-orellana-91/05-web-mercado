@@ -7,6 +7,7 @@ import { ProblemPanel } from "@/components/ProblemPanel";
 import { getMetrics, getPrediction, getPrices, resolveSymbol } from "@/lib/api";
 import { day, num, pct } from "@/lib/format";
 import { P3Error } from "@/lib/p3";
+import { attemptFrom } from "@/lib/retry";
 import { settle } from "@/lib/settle";
 import { clean } from "@/lib/text";
 
@@ -25,13 +26,20 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return { title: clean(decode(symbol).toUpperCase(), 16) };
 }
 
-export default async function TickerPage({ params }: { params: Params }) {
+export default async function TickerPage({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams?: Promise<{ r?: string | string[] }>;
+}) {
   const { symbol: raw } = await params;
+  const attempt = attemptFrom((await searchParams)?.r);
   // El símbolo se valida (formato + lista de /tickers) antes de construir cualquier URL hacia P3.
   const ticker = await settle(resolveSymbol(decode(raw)));
   if (!ticker.ok) {
     if (ticker.error instanceof P3Error && ticker.error.kind === "not_found") notFound();
-    return <ProblemPanel error={ticker.error} path={`/ticker/${encodeURIComponent(raw)}`} />;
+    return <ProblemPanel error={ticker.error} path={`/ticker/${encodeURIComponent(raw)}`} attempt={attempt} />;
   }
   const { symbol, name, sector } = ticker.data;
   const [prices, metrics, prediction] = await Promise.all([
@@ -54,7 +62,7 @@ export default async function TickerPage({ params }: { params: Params }) {
         {prices.ok ? (
           <PriceChart symbol={clean(symbol, 16)} points={prices.data.items} />
         ) : (
-          <ProblemPanel error={prices.error} path={path} />
+          <ProblemPanel error={prices.error} path={path} attempt={attempt} />
         )}
       </section>
 
@@ -81,13 +89,13 @@ export default async function TickerPage({ params }: { params: Params }) {
             </p>
           </>
         ) : (
-          <ProblemPanel error={metrics.error} path={path} />
+          <ProblemPanel error={metrics.error} path={path} attempt={attempt} />
         )}
       </section>
 
       <section aria-labelledby="h-pred">
         <h2 id="h-pred">Predicción de volatilidad</h2>
-        {prediction.ok ? <PredictionCard p={prediction.data} /> : <ProblemPanel error={prediction.error} path={path} />}
+        {prediction.ok ? <PredictionCard p={prediction.data} /> : <ProblemPanel error={prediction.error} path={path} attempt={attempt} />}
       </section>
       <Disclaimer />
     </>

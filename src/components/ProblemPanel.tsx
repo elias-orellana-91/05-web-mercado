@@ -1,14 +1,15 @@
 import { P3Error, type P3ErrorKind } from "@/lib/p3";
+import { MAX_AUTO_RETRIES, withAttempt } from "@/lib/retry";
 
 const MESSAGES: Record<P3ErrorKind, { title: string; body: string; retry: boolean }> = {
   unavailable: {
     title: "La API de mercado no responde",
-    body: "Puede estar iniciándose (el servicio gratuito se duerme tras un rato sin uso). Esta página se reintentará sola.",
+    body: "Puede estar iniciándose (el servicio gratuito se duerme tras un rato sin uso).",
     retry: true,
   },
   timeout: {
     title: "La API tardó demasiado",
-    body: "Puede estar despertando. Esta página se reintentará sola en unos segundos.",
+    body: "Puede estar despertando.",
     retry: true,
   },
   rate_limited: {
@@ -25,19 +26,33 @@ const MESSAGES: Record<P3ErrorKind, { title: string; body: string; retry: boolea
 };
 
 /** Estado de error amigable: nunca muestra trazas ni detalles internos. */
-export function ProblemPanel({ error, path = "" }: { error: unknown; path?: string }) {
+/**
+ * `path` = ruta actual (con su query, sin `r`); `attempt` = refrescos automáticos ya hechos (`?r=`).
+ * El refresco automático (meta refresh, sin JS) se detiene tras MAX_AUTO_RETRIES.
+ */
+export function ProblemPanel({ error, path = "", attempt = 0 }: { error: unknown; path?: string; attempt?: number }) {
   const kind: P3ErrorKind = error instanceof P3Error ? error.kind : "unexpected";
   const m = MESSAGES[kind];
   const rid = error instanceof P3Error ? error.requestId : undefined;
+  const auto = m.retry && kind !== "rate_limited" && attempt < MAX_AUTO_RETRIES;
+  const exhausted = m.retry && kind !== "rate_limited" && attempt >= MAX_AUTO_RETRIES;
   return (
     <section className="problem" role="alert" aria-live="polite">
-      {m.retry && kind !== "rate_limited" && <meta httpEquiv="refresh" content="20" />}
+      {auto && <meta httpEquiv="refresh" content={`20;url=${withAttempt(path, attempt + 1)}`} />}
       <h2>{m.title}</h2>
       <p>{m.body}</p>
+      {exhausted && (
+        <p>Se agotaron los reintentos automáticos. Reintenta manualmente cuando la API esté disponible.</p>
+      )}
+      {auto && (
+        <p className="muted">
+          Esta página se reintentará sola en 20 s (intento {attempt + 1} de {MAX_AUTO_RETRIES}).
+        </p>
+      )}
       {rid && <p className="muted">Id de petición: {rid}</p>}
       {m.retry && (
         <p>
-          <a className="button" href={path || "?"}>
+          <a className="button" href={withAttempt(path, 0)}>
             Reintentar ahora
           </a>
         </p>

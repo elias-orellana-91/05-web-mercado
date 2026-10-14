@@ -25,7 +25,7 @@ flowchart LR
 ```
 
 - `src/lib/env.ts`: configuración solo del servidor (`P3_BASE_URL`, `P3_API_KEY`, …). **Nunca** `NEXT_PUBLIC_*`.
-- `src/lib/p3.ts`: cliente de P3. Plazo total (`P3_TIMEOUT_MS`) que incluye la lectura del cuerpo y los reintentos; lectura en *streaming* con tope de 2 MB (también si `Content-Length` ya lo supera); `Accept-Encoding: identity` y rechazo de cualquier `Content-Encoding` (sin bombas de descompresión); sin seguir redirecciones; hasta 2 reintentos solo ante fallos de red y 502-504 (429 y 4xx no se reintentan); caché en memoria (5 min, 1 h para tickers/modelo) solo de respuestas correctas.
+- `src/lib/p3.ts`: cliente de P3. Plazo total (`P3_TIMEOUT_MS`) que incluye la lectura del cuerpo y los reintentos; lectura en *streaming* con tope de 2 MB (también si `Content-Length` ya lo supera); `Accept-Encoding: identity` y rechazo de cualquier `Content-Encoding` (sin bombas de descompresión); sin seguir redirecciones; reintentos (`P3_RETRIES`: 0–4, por defecto 2) solo ante fallos de red y 502-504 (429 y 4xx no se reintentan); caché en memoria (5 min para datos de mercado, 1 h para tickers y modelo) **solo de respuestas que ya pasaron la validación del esquema**: una respuesta 200 malformada no se guarda y la siguiente petición vuelve a consultar a P3.
 - `src/lib/schemas.ts`: esquemas zod. Si la forma no coincide → «Respuesta inesperada de la API». Del modelo solo se leen campos públicos.
 - `src/lib/api.ts`: un getter por endpoint (cableados según `03-api-mercado/app/routers/*.py`; no se usa `/openapi.json`). **El símbolo se valida por formato y contra `/tickers` antes de armar cualquier URL**; la ruta usa el símbolo canónico de la lista.
 - `src/lib/text.ts`: `clean()` quita caracteres de control, bidi e invisibles y acota el largo del texto de la API; `null`/listas se muestran como `n/d`. React escapa el HTML y la regla de lint `react/no-danger` prohíbe `dangerouslySetInnerHTML`.
@@ -33,6 +33,9 @@ flowchart LR
 ## 🔒 Seguridad
 
 - **CSP estricta con nonce por petición** (`src/proxy.ts`), sin `unsafe-inline` ni `unsafe-eval` en producción: `default-src 'self'`, `script-src 'self' 'nonce-…' 'strict-dynamic'`, `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`. Por eso las páginas son de render dinámico. El código no usa estilos en línea (los gráficos se estilan con CSS).
+- Rutas con codificación porcentual inválida (`/ticker/%`, `/ticker/%zz`…): Next respondería 500 en texto plano y sin cabeceras; `proxy.ts` las intercepta antes y devuelve un **400 con página amigable** y las cabeceras de seguridad (CSP `default-src 'none'`, `nosniff`, …).
+- Favicon propio (`src/app/icon.svg`, sin fuentes ni recursos externos).
+- Saneado: el texto de la API se limpia ya en los esquemas (control, ANSI, bidi, invisibles), por lo que tampoco viaja sucio en el payload RSC que Next incrusta en el HTML. Los campos de enumeraciones y fechas se validan con lista cerrada/regex.
 - Cabeceras: `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Strict-Transport-Security`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`; `poweredByHeader: false`.
 - Los errores se muestran con mensajes amigables; nunca trazas ni el mensaje interno. Los parámetros de la URL del ranking se validan con una lista cerrada (valor inválido → valor por defecto).
 - Dependencias fijadas (`save-exact` + `package-lock.json`), CI con acciones por SHA y permisos mínimos, `dependabot.yml` (npm + github-actions).
@@ -87,7 +90,7 @@ Colores con buen contraste en modo claro y oscuro (sigue `prefers-color-scheme`;
 
 ## 🚀 Despliegue sugerido (no incluido)
 
-Cualquier plataforma con Node ≥ 22 (p. ej. Render, Railway o Vercel): `npm ci && npm run build`, arranque `npm start`, y definir `P3_BASE_URL` (y `P3_API_KEY` si aplica) como variables **del servidor**. Si P3 está en un plan gratuito que se duerme, la web muestra «La API no responde» y se reintenta sola cada 20 s mientras tanto. La caché en memoria es por proceso: con varias réplicas cada una tendrá la suya. Detrás de un proxy, mantén las cabeceras de seguridad y HTTPS.
+Cualquier plataforma con Node ≥ 22 (p. ej. Render, Railway o Vercel): `npm ci && npm run build`, arranque `npm start`, y definir `P3_BASE_URL` (y `P3_API_KEY` si aplica) como variables **del servidor**. Si P3 está en un plan gratuito que se duerme, la web muestra «La API no responde» y se reintenta sola cada 20 s, **como máximo 5 veces seguidas** (sin JavaScript: `<meta refresh>` con un contador `?r=` en la URL); después queda un mensaje estático para reintentar manualmente (el botón reinicia el contador). Los 429 y los errores no transitorios no se refrescan solos. La caché en memoria es por proceso: con varias réplicas cada una tendrá la suya. Detrás de un proxy, mantén las cabeceras de seguridad y HTTPS.
 
 ## ⚠️ Límites y resultados honestos
 

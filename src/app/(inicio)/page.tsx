@@ -5,6 +5,7 @@ import { Disclaimer } from "@/components/Disclaimer";
 import { ProblemPanel } from "@/components/ProblemPanel";
 import { fmtValue, headline, metricLabel, RankingTable } from "@/components/RankingTable";
 import { getRanking, METRICS, ORDERS, PERIODS } from "@/lib/api";
+import { attemptFrom } from "@/lib/retry";
 import { settle } from "@/lib/settle";
 import { clean } from "@/lib/text";
 
@@ -58,6 +59,8 @@ export default async function Home({
   const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
   const q = query.parse({ period: first(raw.period), metric: first(raw.metric), order: first(raw.order) });
   const res = await settle(getRanking(q.period, q.metric, q.order));
+  const attempt = attemptFrom(raw.r);
+  const here = `/?${new URLSearchParams({ period: q.period, metric: q.metric, order: q.order }).toString()}`;
 
   return (
     <>
@@ -82,7 +85,7 @@ export default async function Home({
           </p>
         </>
       ) : (
-        <ProblemPanel error={res.error} />
+        <ProblemPanel error={res.error} path={here} attempt={attempt} />
       )}
       <Disclaimer />
     </>

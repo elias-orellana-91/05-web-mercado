@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import { ProblemPanel } from "@/components/ProblemPanel";
 import { getSectors } from "@/lib/api";
 import { num, pct } from "@/lib/format";
+import { attemptFrom } from "@/lib/retry";
 import { settle } from "@/lib/settle";
 import { clean } from "@/lib/text";
 
 export const metadata: Metadata = { title: "Sectores" };
 
-export default async function Sectores() {
+export default async function Sectores({ searchParams }: { searchParams?: Promise<{ r?: string | string[] }> } = {}) {
+  const attempt = attemptFrom((await searchParams)?.r);
   const res = await settle(getSectors());
   const rows = res.ok ? [...res.data.sectors].sort((a, b) => b.total_return - a.total_return) : [];
   return (
@@ -58,7 +60,7 @@ export default async function Sectores() {
           </div>
         </>
       ) : (
-        <ProblemPanel error={res.error} path="/sectores" />
+        <ProblemPanel error={res.error} path="/sectores" attempt={attempt} />
       )}
     </>
   );

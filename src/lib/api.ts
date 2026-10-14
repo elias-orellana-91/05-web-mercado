@@ -1,4 +1,4 @@
-import { p3Get, P3Error, parseWith } from "./p3";
+import { p3Fetch, P3Error } from "./p3";
 import {
   metricsSchema, modelSchema, predictionSchema, pricesSchema, rankingSchema, sectorsSchema, tickersSchema,
   type Ticker,
@@ -15,7 +15,7 @@ export type MetricName = (typeof METRICS)[number];
 export type Order = (typeof ORDERS)[number];
 
 export async function getTickers(): Promise<Ticker[]> {
-  return parseWith(tickersSchema, await p3Get("/tickers", { ttlMs: TTL.tickers }));
+  return p3Fetch(tickersSchema, "/tickers", { ttlMs: TTL.tickers });
 }
 
 /** Valida el símbolo (formato Y pertenencia a /tickers) antes de armar cualquier URL. */
@@ -28,33 +28,33 @@ export async function resolveSymbol(raw: string): Promise<Ticker> {
 }
 
 export async function getRanking(period: Period, metric: MetricName, order: Order, limit = 20) {
-  return parseWith(rankingSchema, await p3Get("/ranking", { params: { period, metric, order, limit }, ttlMs: TTL.market }));
+  return p3Fetch(rankingSchema, "/ranking", { params: { period, metric, order, limit }, ttlMs: TTL.market });
 }
 
 export async function getMetrics(symbol: string) {
   const t = await resolveSymbol(symbol);
-  return parseWith(metricsSchema, await p3Get(`/metrics/${encodeURIComponent(t.symbol)}`, { ttlMs: TTL.market }));
+  return p3Fetch(metricsSchema, `/metrics/${encodeURIComponent(t.symbol)}`, { ttlMs: TTL.market });
 }
 
 /** Últimos `days` cierres, en orden cronológico. */
 export async function getPrices(symbol: string, days = 260) {
   const t = await resolveSymbol(symbol);
-  const data = parseWith(
-    pricesSchema,
-    await p3Get(`/prices/${encodeURIComponent(t.symbol)}`, { params: { limit: days, order: "desc" }, ttlMs: TTL.market }),
-  );
+  const data = await p3Fetch(pricesSchema, `/prices/${encodeURIComponent(t.symbol)}`, {
+    params: { limit: days, order: "desc" },
+    ttlMs: TTL.market,
+  });
   return { ...data, items: [...data.items].reverse() };
 }
 
 export async function getPrediction(symbol: string) {
   const t = await resolveSymbol(symbol);
-  return parseWith(predictionSchema, await p3Get(`/predictions/${encodeURIComponent(t.symbol)}`, { ttlMs: TTL.market }));
+  return p3Fetch(predictionSchema, `/predictions/${encodeURIComponent(t.symbol)}`, { ttlMs: TTL.market });
 }
 
 export async function getSectors() {
-  return parseWith(sectorsSchema, await p3Get("/sectors/summary", { ttlMs: TTL.market }));
+  return p3Fetch(sectorsSchema, "/sectors/summary", { ttlMs: TTL.market });
 }
 
 export async function getModel() {
-  return parseWith(modelSchema, await p3Get("/model/info", { ttlMs: TTL.model }));
+  return p3Fetch(modelSchema, "/model/info", { ttlMs: TTL.model });
 }

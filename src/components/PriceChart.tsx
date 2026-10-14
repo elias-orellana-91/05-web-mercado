@@ -24,8 +24,8 @@ export function PriceChart({ symbol, points }: { symbol: string; points: Point[]
     <figure className="chart">
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-labelledby={`chart-t-${symbol}`} focusable="false">
         <title id={`chart-t-${symbol}`}>{summary}</title>
-        {ticks.map((t) => (
-          <g key={t}>
+        {ticks.map((t, i) => (
+          <g key={i}>
             <line className="chart-grid" x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)} />
             <text className="chart-label" x={PAD.l - 6} y={y(t) + 4} textAnchor="end">
               {num(t)}
